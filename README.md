@@ -13,7 +13,11 @@ This repository includes SOTA (AP, N, S) algorithms and modified (AB, SKL) algor
 
 The comparison grpahs can be obtained in the "Results" directory using following commands. 
 
-CUDA implementation of randomly connected pulse-coupled Izhikevich neurons (Izhikevich, 2003). Dynamic parallelism is used at the synaptic update step in the spiking neural network simulations.
+CUDA implementation of randomly connected pulse-coupled Izhikevich neurons (Izhikevich, 2003). 
+
+Dynamic parallelism is used by AP algorithm at the synaptic update step in the spiking neural network simulations.
+
+Cooperative Groups are used for Inter Block GPU Synchronization by AB and SKL algorithms. This is supported by CUDA Toolkit 9.0 and later versions.
 
 Code is developed under Ubuntu with Quadro and Titan GPUs, CUDA Toolkit 11.0.
 
