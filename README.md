@@ -20,8 +20,11 @@ Code is developed under Ubuntu with Quadro and Titan GPUs, CUDA Toolkit 11.0.
 Note that dynamic parallelism requires compute capability 3.5 and separate compilation.
 
 #### Commands to execute ###
+
 RUN -------------- > python gpu4snn.py $GPU_NAME$ $NUMBER_OF_ITERATIONS$ 
+
 FOR EX ----------- > python gpu4snn.py Quadro 2000
+
 RESULTS IN  ------ > ./$GPU_NAME$/$NUMBER_OF_ITERATIONS$/Results
 
 Change Neurons (N) and Synapses (Nsyn) from gpu4snn.py file 
