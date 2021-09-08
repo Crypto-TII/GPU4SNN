@@ -25,7 +25,7 @@ Note that dynamic parallelism requires compute capability 3.5 and separate compi
 
 #### Commands to execute ###
 
-RUN -------------- > python gpu4snn.py $GPU_NAME$ $NUMBER_OF_ITERATIONS$ 
+`RUN -------------- > python gpu4snn.py $GPU_NAME$ $NUMBER_OF_ITERATIONS$`
 
 FOR EXAMPLE ----------- > python gpu4snn.py Quadro 2000
 
