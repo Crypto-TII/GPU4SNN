@@ -459,6 +459,25 @@ __device__ void SKL_stateupdate(Neuron *neuron,			// Neural parameters of indivi
    
 }
 
+__device__ void  spike_count(bool *d_spikes, int *d_spkcount, const int N){
+
+	int i;
+     	int block_id = blockIdx.x;
+     	
+     	*d_spkcount = 0;
+     	do{
+        	i = threadIdx.x + block_id * blockDim.x;
+		//for ( int i=id; i<N; i++)
+		{
+					if ( i<N && d_spikes[i] == true ){
+						atomicAdd((int *)&d_spkcount[0], 1);						
+					}
+		}
+		block_id = block_id + gridDim.x;	
+	}while(i<N);
+}
+
+
 // //dynamic ==4    SKL-algorithm
 __global__ void SKL_deliverspks(Neuron *neuron,		// Neural parameters of individual neurons
 							bool *spike,			// List of booleans to keep spiking neuron indices
@@ -473,15 +492,15 @@ __global__ void SKL_deliverspks(Neuron *neuron,		// Neural parameters of individ
 							curandState_t *state,
 							const int mode, int d_count1){
 	grid_group grid = this_grid();	 
-	int d_count = d_count1;
-	*d_totalspkcount = 0; 
+	int d_count = d_count1;	
+	*d_totalspkcount = 0;  int counter_value=0 ;
 	while(d_count){
 	  d_count = d_count - 1;	
 	  int id = threadIdx.x + blockIdx.x * blockDim.x;
-	  
+	  //////////////////// neuron update  //////////////////////////////////////////////
 	  SKL_stateupdate(neuron, spike, d_Isyn, state, N, N_exc, mode, id);
 	  grid.sync();
-	  
+	  //////////////////// spike propagation /////////////////////////////////////////////
 	  id = threadIdx.x + blockIdx.x * blockDim.x;
 	  while(id < N*N_syn){
 		//id = threadIdx.x + block_id * blockDim.x;
@@ -496,17 +515,22 @@ __global__ void SKL_deliverspks(Neuron *neuron,		// Neural parameters of individ
 		}		
 		id = id + gridDim.x*blockDim.x;
 	     }
-	  id = threadIdx.x + blockIdx.x * blockDim.x; 	  	
+	 
 	  grid.sync();
-	  //  spike_count(spike, d_spkcount, N);
-     	  while(id<N){
-		if (  spike[id] == true ){
-			//atomicAdd((int *)&d_spkcount[0], 1);	
-			atomicAdd((int *)&d_totalspkcount[0], 1);						
+	  //////////////////// spike count //////////////////////////////////////////////////
+	  spike_count(spike, d_totalspkcount, N);
+	  grid.sync(); 
+	  
+	  if(threadIdx.x==0 && blockIdx.x==0 && threadIdx.y==0 && blockIdx.y==0 && threadIdx.z==0 && blockIdx.z==0) {
+	 // if(threadIdx.x==0 && blockIdx.x==0) {		
+		  counter_value = counter_value + *d_totalspkcount;		  	
 		}
-		id = id + gridDim.x*blockDim.x;	
-	    }
-	}//dcount
+		
+	}
+	if(threadIdx.x==0 && blockIdx.x==0 && threadIdx.y==0 && blockIdx.y==0 && threadIdx.z==0 && blockIdx.z==0) {
+	//if(threadIdx.x==0 && blockIdx.x==0 ) {		  
+		  *d_totalspkcount = counter_value ;
+	}	
 }
 
 
