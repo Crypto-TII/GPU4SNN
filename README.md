@@ -27,10 +27,10 @@ Note that dynamic parallelism requires compute capability 3.5 and separate compi
 
 `RUN -------------- > python gpu4snn.py $GPU_NAME$ $NUMBER_OF_ITERATIONS$`
 
-FOR EXAMPLE ----------- > python gpu4snn.py Quadro 2000
+`FOR EXAMPLE ----------- > python gpu4snn.py Quadro 2000`
 
-RESULTS   ------ > ./$GPU_NAME$/$NUMBER_OF_ITERATIONS$/Results
+`RESULTS   ------ > ./$GPU_NAME$/$NUMBER_OF_ITERATIONS$/Results`
 
 Change Neurons (N) and Synapses (Nsyn) from gpu4snn.py file 
-N = 2500
-Nsyn = 1000
+`N = 2500`
+`Nsyn = 1000`
