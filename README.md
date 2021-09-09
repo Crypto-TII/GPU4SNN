@@ -29,6 +29,6 @@ Change Neurons (N) and Synapses (Nsyn) from gpu4snn.py file
 
 * The dynamic parallelism is used by AP algorithm at the synaptic update step in the spiking neural network simulations. Note that dynamic parallelism requires compute capability 3.5 and separate compilation.
 * Cooperative Groups are used for Inter Block GPU Synchronization by AB and SKL algorithms. This is supported by CUDA Toolkit 9.0 and later versions.
-* The code is developed under Ubuntu with Quadro and Titan GPUs, CUDA Toolkit 11.0.
+* The code is developed under Ubuntu with Quadro and Titan GPUs, CUDA Toolkit 11.3.
 
 
