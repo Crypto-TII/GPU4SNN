@@ -1,5 +1,6 @@
 # GPU4SNN
 # Accelerating Spike Propagation for GPU-based Spiking Neural Network Simulations
+_(This work has been submitted to Neural Networks and is currently under review)_
 
 This repository includes the CUDA implementation of SOTA (AP, N, S) algorithms and two new proposed (AB, SKL) algorithms for SNN simulation based on a network of randomly connected pulse-coupled Izhikevich neurons (Izhikevich, 2003). 
 
