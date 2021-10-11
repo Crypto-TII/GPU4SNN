@@ -4,7 +4,7 @@ _(This work has been submitted to Neural Networks and is currently under review)
 
 This repository includes the CUDA implementation of state-of-the-art (AP, N, S) algorithms and two new proposed (AB, SKL) algorithms for SNN simulation based on a network of randomly connected pulse-coupled Izhikevich neurons (Izhikevich, 2003). 
 
-The reference code is taken from the current state-of-the-art (SOTA) implementation:
+The reference code is taken from the state-of-the-art (SOTA) implementation:
 SOTA _"Dynamic parallelism for synaptic updating in GPU-accelerated spiking neural network simulations"_  ([Paper](https://www.sciencedirect.com/science/article/pii/S0925231218304168)) ([Code](https://bitbucket.org/bkasap/dynamicparallelismsnn/src/master/))
 
 #### Commands to execute ###
