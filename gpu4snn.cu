@@ -76,20 +76,31 @@ __global__ void randgeneratorinit(unsigned int seed, curandState_t* states, int 
 		}
 }
 
+// Initialize the random states
+__global__ void randgeneratorinit2(float* rand_float, curandState_t* state, int N) {
+	int id = threadIdx.x + blockIdx.x * blockDim.x;
+	curandState_t localState ;
+	
+	if ( id < N ){
+	/* we have to initialize the state */
+		localState = state[id];
+		rand_float[id] = curand_uniform(&localState); 
+	}
+}
+
+//__device__ float rand_float[1] ;  
 // Initialize the neural parameters
-__global__ void initNeuron(int N_exc, int N, Neuron *neuron, curandState_t* state){
+__global__ void initNeuron(int N_exc, int N, Neuron *neuron, float* rand_float){
 	int id = threadIdx.x + blockIdx.x * blockDim.x;
 	//printf("%d \n", id);
-
-	curandState_t localState = state[id];
-	float rand_float = curand_uniform(&localState);
+	
 	// initialize excitatory neuron parameters
 	if ( id < N ){
 	if ( id < N_exc ){
 		neuron[id].a = 0.02f;
 		neuron[id].b = 0.2f;
-		neuron[id].c = -65.0f+(15.f*powf(rand_float,2.0f));
-		neuron[id].d = 8.0f-(6.f*powf(rand_float,2.0f));
+		neuron[id].c = -65.0f+(15.f*powf(rand_float[id],2.0f));
+		neuron[id].d = 8.0f-(6.f*powf(rand_float[id],2.0f));
 		neuron[id].v = -65.0f;
 		neuron[id].u = neuron[id].v*neuron[id].b;
 		neuron[id].I = 0.0f;
@@ -98,8 +109,8 @@ __global__ void initNeuron(int N_exc, int N, Neuron *neuron, curandState_t* stat
 	}
 	// initialize inhibitory neuron parameters
 	else if (id >= N_exc and id < N ){
-		neuron[id].a = 0.02f+(0.08f*rand_float);
-		neuron[id].b = 0.25f-(0.05f*rand_float);
+		neuron[id].a = 0.02f+(0.08f*rand_float[id]);
+		neuron[id].b = 0.25f-(0.05f*rand_float[id]);
 		neuron[id].c = -65.0f;
 		neuron[id].d = 2.0f;
 		neuron[id].v = -65.0f;
@@ -108,8 +119,6 @@ __global__ void initNeuron(int N_exc, int N, Neuron *neuron, curandState_t* stat
 		neuron[id].nospks = 0;
 		neuron[id].neuronid = id;
 	}
-
-	state[id] = localState;
 	}
 }
 
@@ -130,7 +139,6 @@ __global__ void stateupdate(Neuron *neuron,			// Neural parameters of individual
 							float *d_conn_w,		// Connectivity strengths
 							int *d_conn_idx,		// Connection target neuron ids
 							float *d_Isyn,			// Synaptic inputs
-							curandState_t *state,	// States for random number generators (RNG)
 							const int N,//			// Number of neurons
 							const int N_exc,		// Number of excitatory neurons
 							//const int N_inh,		// Number of inhibitory neurons
@@ -146,10 +154,6 @@ __global__ void stateupdate(Neuron *neuron,			// Neural parameters of individual
       if ( id < N ){
 	if (!isfinite(neuron[id].I))
 		neuron[id].I = 0.f;
-
-	// Stochastic input current
-	curandState_t localState = state[id];
-	float rand_float = curand_normal(&localState);	
 
 		// Selecting the conductances for varying firing regimes
 		float ge, gi;
@@ -168,11 +172,11 @@ __global__ void stateupdate(Neuron *neuron,			// Neural parameters of individual
 		}
 
 		if ( id < N_exc ){
-			neuron[id].I = ge*rand_float;		//5.0 for balanced regime, 7.5 for irregular, 2.5 for quiet
+			neuron[id].I = ge; //*rand_float[0];		//5.0 for balanced regime, 7.5 for irregular, 2.5 for quiet
 		}
 		//else if (id >= N_exc and id < N )
 		else {
-			neuron[id].I = gi*rand_float;		//2.0 for balanced regime, 3.0 for irregular, 1.0 for quiet
+			neuron[id].I = gi;//*rand_float[0];		//2.0 for balanced regime, 3.0 for irregular, 1.0 for quiet
 		}
 
 		// Current each neuron receives at a timestep
@@ -206,7 +210,7 @@ __global__ void stateupdate(Neuron *neuron,			// Neural parameters of individual
 		else{
 			spike[id] = false;
 		}
-		state[id] = localState;
+		
 	}	
 }
 
@@ -224,7 +228,7 @@ __global__ void deliverspks1(Neuron *neuron,		// Neural parameters of individual
 
 	// N-algorithm
 	// a thread for each neuron (presynaptic)
-	if (id < N){
+	while (id < N){
 		// for each presynaptic neuron
 		for (int dst_idx=0; dst_idx<N_syn; dst_idx++){
 			// check if there is a spike from presynaptic neurons
@@ -233,6 +237,7 @@ __global__ void deliverspks1(Neuron *neuron,		// Neural parameters of individual
 				atomicAdd(&d_Isyn[d_conn_idx[id*N_syn+dst_idx]], d_conn_w[id*N_syn+dst_idx]);
 			}
 		}
+		id = id + blockDim.x*gridDim.x;
 	}
 }
 
@@ -246,25 +251,28 @@ __global__ void deliverspks2(Neuron *neuron,		// Neural parameters of individual
 							const int N_exc,		// Number of excitatory neurons
 							const int N_inh,		// Number of inhibitory neurons
 							const int N_syn){		// Number of synapses per neuron
-	int id = threadIdx.x + blockIdx.x * blockDim.x;
-
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
 	//int src;
 	// S-algorithm
 	// a thread for each synapse
-	if (id < N*N_syn){
-		//int src = (int) (id/N_syn);
-		// check if there is a spike from presynaptic neurons
-		if (spike[(id/N_syn)] == true){
-			atomicAdd(&d_Isyn[d_conn_idx[id]], d_conn_w[id]);
+	while (idx < N){
+		for (int dst_idx=idy; dst_idx<N_syn; dst_idx=dst_idx+blockDim.y*gridDim.y){
+			// check if there is a spike from presynaptic neurons
+			//d_conn_idx[id*N_syn+dst_idx];
+			if (spike[idx] == true){
+				atomicAdd(&d_Isyn[d_conn_idx[idx*N_syn+dst_idx]], d_conn_w[idx*N_syn+dst_idx]);
+			}
 		}
+		idx=idx+blockDim.x*gridDim.x;
 	}
+	
 }
 
 ////////////dynamic ==3   AB-algo stateupdate
 __global__ void AB_stateupdate(Neuron *neuron,			// Neural parameters of individual neurons
 							bool *spike,			// List of booleans to keep spiking neuron indices
 							float *d_Isyn,			// Synaptic inputs
-							curandState_t *state,	// States for random number generators (RNG)
 							const int N,//			// Number of neurons
 							const int N_exc,		// Number of excitatory neurons
 							int mode){
@@ -277,15 +285,9 @@ __global__ void AB_stateupdate(Neuron *neuron,			// Neural parameters of individ
 	  //id = id + block_id;
 	 // if ( id < N )
 	 {
-
 	  if (!isfinite(neuron[id].I))
 		neuron[id].I = 0.f;
 
-	  // Stochastic input current
-	  curandState_t localState = state[id];
-	  float rand_float = curand_normal(&localState);
-	  //
-	
 		// Selecting the conductances for varying firing regimes
 		float ge, gi;
 		switch ( mode ){
@@ -303,11 +305,11 @@ __global__ void AB_stateupdate(Neuron *neuron,			// Neural parameters of individ
 		}
 
 		if ( id < N_exc ){
-			neuron[id].I = ge*rand_float;		//5.0 for balanced regime, 7.5 for irregular, 2.5 for quiet
+			neuron[id].I = ge;//*rand_float[0];		//5.0 for balanced regime, 7.5 for irregular, 2.5 for quiet
 		}
 		//else if (id >= N_exc and id < N ){
 		else{
-			neuron[id].I = gi*rand_float;		//2.0 for balanced regime, 3.0 for irregular, 1.0 for quiet
+			neuron[id].I = gi;//*rand_float[0];		//2.0 for balanced regime, 3.0 for irregular, 1.0 for quiet
 		}
 
 		// Current each neuron receives at a timestep
@@ -335,7 +337,7 @@ __global__ void AB_stateupdate(Neuron *neuron,			// Neural parameters of individ
 		else{
 			spike[id] = false;   
 		}
-		state[id] = localState;
+		
 	  }
 		id  = id + gridDim.x*blockDim.x;
 	  
@@ -353,53 +355,48 @@ __global__ void AB_deliverspks(Neuron *neuron,		// Neural parameters of individu
 							const int N,			// Number of neurons
 							const int N_exc,		// Number of excitatory neurons
 							const int N_inh,		// Number of inhibitory neurons
-							const int N_syn		// Number of synapses per neuron){
-							){
-	int id = threadIdx.x + blockIdx.x * blockDim.x;
-	//int id;
-	//int block_id = blockIdx.x;
-	//for(int id = id1; id < N*N_syn ; id  =+  gridDim.x*blockDim.x)
-	//printf("gridSize=%d gridSize/\t", gridSize);
-	while(id < N*N_syn )
-	      {
-		//id = threadIdx.x + block_id * blockDim.x;
-		//int src;
-		if (id < N*N_syn)
-		{
-			//int src = (int) (id/N_syn);
+							const int N_syn		// Number of synapses per neuron
+							)
+							{
+	
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	int idy = threadIdx.y + blockIdx.y * blockDim.y;
+	//int src;
+	// S-algorithm
+	// a thread for each synapse
+	while (idx < N){
+		//int src = (int) (id/N_syn);
+		// check if there is a spike from presynaptic neurons
+		//if (spike[((id-id%N)/N_syn)] == true){
+		//		atomicAdd(&d_Isyn[d_conn_idx[id]], d_conn_w[id]);
+		//}
+		for (int dst_idx=idy; dst_idx<N_syn; dst_idx=dst_idx+blockDim.y*gridDim.y){
 			// check if there is a spike from presynaptic neurons
-			if ( spike[(id/N_syn)] == true){
-				atomicAdd(&d_Isyn[d_conn_idx[id]], d_conn_w[id]);
+			//d_conn_idx[id*N_syn+dst_idx];
+			if (spike[idx] == true){
+				atomicAdd(&d_Isyn[d_conn_idx[idx*N_syn+dst_idx]], d_conn_w[idx*N_syn+dst_idx]);
 			}
-		}		
-		id = id + gridDim.x*blockDim.x;
-	     }	    
-	//}while(block_id < gridSize );
+		}
+		idx=idx+blockDim.x*gridDim.x;
+	}
 }
+
 
 /////dynamic ==4    under SKL-algorithm  SKL_deliverspks
 // State update of neural variables
-__device__ void SKL_stateupdate(Neuron *neuron,			// Neural parameters of individual neurons
+__device__ void SKL_stateupdate1(Neuron *neuron,			// Neural parameters of individual neurons
 							bool *spike,			// List of booleans to keep spiking neuron indices
 							float *d_Isyn,			// Synaptic inputs
-							curandState_t *state,	// States for random number generators (RNG)
 							const int N,//			// Number of neurons
 							const int N_exc,		// Number of excitatory neurons
-							const int mode, int id){    //, int gridSizeN   
-     
+							int mode){    //, int gridSizeN   
+    volatile unsigned int  idx, idy, id;    
+    
+    idx = threadIdx.x + blockIdx.x * blockDim.x;  idy = threadIdx.y + blockIdx.y * blockDim.y;	
+    id = idx*gridDim.y*blockDim.y+idy;
      while(id < N){
-	  //id = threadIdx.x + block_id * blockDim.x;
-	  //id = id + block_id;
-	  //if ( id < N )
-	 {
-
 	  if (!isfinite(neuron[id].I))
 		neuron[id].I = 0.f;
-
-	  // Stochastic input current
-	  curandState_t localState = state[id];
-	  float rand_float = curand_normal(&localState);
-	  //
 	
 		// Selecting the conductances for varying firing regimes
 		float ge, gi;
@@ -418,11 +415,11 @@ __device__ void SKL_stateupdate(Neuron *neuron,			// Neural parameters of indivi
 		}
 
 		if ( id < N_exc ){
-			neuron[id].I = ge*rand_float;		//5.0 for balanced regime, 7.5 for irregular, 2.5 for quiet
+			neuron[id].I = ge;//*rand_float[0];		//5.0 for balanced regime, 7.5 for irregular, 2.5 for quiet
 		}
 		//else if (id >= N_exc and id < N ){
 		else {
-			neuron[id].I = gi*rand_float;		//2.0 for balanced regime, 3.0 for irregular, 1.0 for quiet
+			neuron[id].I = gi;//*rand_float[0];		//2.0 for balanced regime, 3.0 for irregular, 1.0 for quiet
 		}
 
 		// Current each neuron receives at a timestep
@@ -450,36 +447,39 @@ __device__ void SKL_stateupdate(Neuron *neuron,			// Neural parameters of indivi
 		else{
 			spike[id] = false;   
 		}
-		state[id] = localState;
-	  }
-		id  = id + gridDim.x*blockDim.x;
-	  
-	 // block_id = block_id + gridDim.x;	
-	}//while(id < N);		
+		idx+=blockDim.x*gridDim.x;  idy+=blockDim.y*gridDim.y;
+		id = idx*gridDim.y*blockDim.y+idy;
+	}		
    
 }
 
-__device__ void  spike_count(bool *d_spikes, int *d_spkcount, const int N){
+__device__ void  spike_count1(bool *d_spikes, int *d_spkcount, const int N){
 
-	int i;
-     	int block_id = blockIdx.x;
-     	
-     	*d_spkcount = 0;
-     	do{
-        	i = threadIdx.x + block_id * blockDim.x;
-		//for ( int i=id; i<N; i++)
-		{
-					if ( i<N && d_spikes[i] == true ){
-						atomicAdd((int *)&d_spkcount[0], 1);						
-					}
-		}
-		block_id = block_id + gridDim.x;	
-	}while(i<N);
+	//int i;
+     	//int block_id = blockIdx.x;
+     	//i = threadIdx.x + block_id * blockDim.x;
+     	volatile unsigned int  idx, idy, id;    
+    
+    	idx = threadIdx.x + blockIdx.x * blockDim.x;  idy = threadIdx.y + blockIdx.y * blockDim.y;	
+    	id = idx*gridDim.y*blockDim.y+idy;
+     	//*d_spkcount = 0;
+     	while(id<N){
+        	//i = threadIdx.x + block_id * blockDim.x;
+		if ( d_spikes[id] == true ){
+			atomicAdd((int *)&d_spkcount[0], 1);						
+		}		
+		//block_id = block_id + gridDim.x;
+		//i += blockDim.x*gridDim.x * blockDim.y*gridDim.y;
+		//i += blockDim.x*gridDim.x ; //* blockDim.y*gridDim.y;
+		idx+=blockDim.x*gridDim.x;  idy+=blockDim.y*gridDim.y;
+		id = idx*gridDim.y*blockDim.y+idy;
+	}
 }
 
+__device__ int d_count;
 
 // //dynamic ==4    SKL-algorithm
-__global__ void SKL_deliverspks(Neuron *neuron,		// Neural parameters of individual neurons
+__global__ void SKL_deliverspks1(Neuron *neuron,		// Neural parameters of individual neurons
 							bool *spike,			// List of booleans to keep spiking neuron indices
 							float *d_conn_w,		// Connectivity strengths
 							int *d_conn_idx,		// Connection target neuron ids
@@ -488,49 +488,61 @@ __global__ void SKL_deliverspks(Neuron *neuron,		// Neural parameters of individ
 							const int N_exc,		// Number of excitatory neurons
 							const int N_syn,		// Number of synapses per neuron
 							//int *d_spkcount, 
-							int *d_totalspkcount, 			// 
-							curandState_t *state,
+							int *d_totalspkcount, 	
 							const int mode, int d_count1){
-	grid_group grid = this_grid();	 
-	int d_count = d_count1;	
+	grid_group grid = this_grid();
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	unsigned int idy = threadIdx.y + blockIdx.y * blockDim.y;
+	unsigned int id = idx*gridDim.y*blockDim.y+idy;	 
+	//int d_count = d_count1;
+	  if(threadIdx.x==0 && blockIdx.x==0 && threadIdx.y==0 && blockIdx.y==0 && threadIdx.z==0 && blockIdx.z==0) { 
+	  	d_count = d_count1;		  	
+	  }
 	*d_totalspkcount = 0;  int counter_value=0 ;
-	while(d_count){
-	  d_count = d_count - 1;	
-	  int id = threadIdx.x + blockIdx.x * blockDim.x;
+	 //
+	 grid.sync();
+	 __threadfence(); 
+	while(d_count){	
 	  //////////////////// neuron update  //////////////////////////////////////////////
-	  SKL_stateupdate(neuron, spike, d_Isyn, state, N, N_exc, mode, id);
+	  SKL_stateupdate1(neuron, spike, d_Isyn, N, N_exc, mode);
 	  grid.sync();
-	  //////////////////// spike propagation /////////////////////////////////////////////
-	  id = threadIdx.x + blockIdx.x * blockDim.x;
-	  while(id < N*N_syn){
-		//id = threadIdx.x + block_id * blockDim.x;
-		//int src;
-		if (id < N*N_syn)
-		{
-			//int src = (int) (id/N_syn);
-			// check if there is a spike from presynaptic neurons
-			if ( spike[(id/N_syn)] == true){
-				atomicAdd(&d_Isyn[d_conn_idx[id]], d_conn_w[id]);
-			}			
-		}		
-		id = id + gridDim.x*blockDim.x;
-	     }
-	 
-	  grid.sync();
+	  __threadfence();
+	  //////////////////// spike propagation /////////////////////////////////////////////	  
+		while (idx < N){
+		//idy =0;
+		idy = threadIdx.y + blockIdx.y * blockDim.y;
+			while (idy < N_syn){
+		//for (idx = threadIdx.x + blockIdx.x* blockDim.x; idx<N; idx=idx+blockDim.x*gridDim.x){		
+		//	for (idy = threadIdx.y + blockIdx.y * blockDim.y; idy<N_syn; idy=idy+blockDim.y*gridDim.y){
+				// check if there is a spike from presynaptic neurons
+				//d_conn_idx[id*N_syn+dst_idx];
+				if (spike[idx] == true){
+					atomicAdd(&d_Isyn[d_conn_idx[idx*N_syn+idy]], d_conn_w[idx*N_syn+idy]);
+				}
+				idy+=blockDim.y*gridDim.y;
+				//idy=idy+1;
+			}
+			
+			idx+=blockDim.x*gridDim.x;
+		}	
+	   idx = threadIdx.x + blockIdx.x * blockDim.x;
+	   idy = threadIdx.y + blockIdx.y * blockDim.y;
+	   id = idx*gridDim.y*blockDim.y+idy;	
+	   //id = idx;	
+	   //*d_totalspkcount = 0; 
+	   grid.sync();
+	   __threadfence();
 	  //////////////////// spike count //////////////////////////////////////////////////
-	  spike_count(spike, d_totalspkcount, N);
+	  spike_count1(spike, d_totalspkcount, N);	
+	   if(threadIdx.x==0 && blockIdx.x==0 && threadIdx.y==0 && blockIdx.y==0 && threadIdx.z==0 && blockIdx.z==0)  		   
+	   {
+	  	d_count -= 1;	
+	   } 
 	  grid.sync(); 
-	  
-	  if(threadIdx.x==0 && blockIdx.x==0 && threadIdx.y==0 && blockIdx.y==0 && threadIdx.z==0 && blockIdx.z==0) {
-	 // if(threadIdx.x==0 && blockIdx.x==0) {		
-		  counter_value = counter_value + *d_totalspkcount;		  	
-		}
+	  __threadfence();
 		
-	}
-	if(threadIdx.x==0 && blockIdx.x==0 && threadIdx.y==0 && blockIdx.y==0 && threadIdx.z==0 && blockIdx.z==0) {
-	//if(threadIdx.x==0 && blockIdx.x==0 ) {		  
-		  *d_totalspkcount = counter_value ;
-	}	
+   } // while counter loop
+	
 }
 
 
@@ -658,7 +670,12 @@ int main(int argc, char **argv){
 	//randgeneratorinit<<<gridSizeN, blockSizeN>>>(time(NULL), devStates);
 	randgeneratorinit<<<dimGrid_rng, dimBlock_rng>>>(time(NULL), devStates, N);
 	cudaDeviceSynchronize();
-
+	
+	float *dev_rand_float;
+	cudaGetErrorString(cudaMalloc((void **)&dev_rand_float, N*sizeof(float)));
+	
+	randgeneratorinit2<<<dimGrid_rng, dimBlock_rng>>>(dev_rand_float, devStates, N);
+	cudaDeviceSynchronize();
 	// Initialize connectivity matrix on the GPU
 	printf("Initializing random connectivity matrix values\n");
 
@@ -736,8 +753,9 @@ int main(int argc, char **argv){
       			printf("initNeuron blockSizeN_ini = %d , maxActiveBlocks = %d gridSizeN_ini =%d \n", blockSizeN_ini, numSms * numBlocksPerSm, gridSizeN_ini);
 			
 			//initNeuron<<<gridSizeN, blockSizeN>>>(N_exc, N, d_Neuron, devStates);
-			initNeuron<<<dimGrid_ini, dimBlock_ini>>>(N_exc, N, d_Neuron, devStates);
+			initNeuron<<<dimGrid_ini, dimBlock_ini>>>(N_exc, N, d_Neuron, dev_rand_float);
 			cudaDeviceSynchronize();
+			//cudaMemcpyToSymbol(rand_float, &rand_float, sizeof(float *));
 
 			// Copy initial values of neural parameters back to CPU
 			printf("Retrieving initial parameter values\n");
@@ -862,8 +880,8 @@ int main(int argc, char **argv){
       					&numBlocksPerSm, deliverspks2, blockSizeN_N2, sMemSize));
       			gridSizeN_N2 = (N*N_syn + blockSizeN_N2 - 1) / blockSizeN_N2;  //gridSizeNNsyn = (N*N_syn + blockSizeNNsyn - 1) / blockSizeNNsyn;
   				
-  			dim3 dimGrid_N2(gridSizeN_N2, 1, 1),
-      				dimBlock_N2(blockSizeN_N2, 1, 1); //
+  			dim3 dimGrid_N2(gridSizeN_N2/2, 2, 1),
+      				dimBlock_N2(blockSizeN_N2/16, 16, 1); //
       			occupancy = (numBlocksPerSm * blockSizeN_N2 / props.warpSize) / 
                     		(float)(props.maxThreadsPerMultiProcessor / 
                             		props.warpSize);
@@ -884,17 +902,17 @@ int main(int argc, char **argv){
       			printf("3 AB_stateupdate numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       			printf("3 AB_stateupdate blockSizeN_per = %d , maxActiveBlocks = %d gridSizeN_per =%d \n", blockSizeN_per, numSms * numBlocksPerSm, gridSizeN_per);  
       			void *kernelArgs_per[] = {
-     				 (void *)&d_Neuron,  (void *)&d_spikes, (void *)&d_Isyn, (void *)&devStates, (void *)&N, (void *)&N_exc, (void *)&mode,};
+     				 (void *)&d_Neuron,  (void *)&d_spikes, (void *)&d_Isyn, (void *)&N, (void *)&N_exc, (void *)&mode,};
       				
       			///// spike propagation parameters for AB-algo using persistence	
       			int minGridSize_N3, blockSizeN_N3, gridSizeN_N3;
 			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_N3, &blockSizeN_N3, AB_deliverspks, 0, 0));
-  				checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
       					&numBlocksPerSm, AB_deliverspks, blockSizeN_N3, sMemSize));
       				//gridSizeN_N2 = (N*N_syn + blockSizeN_N2 - 1) / blockSizeN_N2;  //gridSizeNNsyn = (N*N_syn + blockSizeNNsyn - 1) / blockSizeNNsyn;
   			gridSizeN_N3 = numSms * numBlocksPerSm;
-  			dim3 AB_dimGrid(gridSizeN_N3, 1, 1),
-      				AB_dimBlock(blockSizeN_N3, 1, 1); //
+  			dim3 AB_dimGrid(gridSizeN_N3/4, 4, 1),
+      				AB_dimBlock(blockSizeN_N3/4, 4, 1); //
       			occupancy = (numBlocksPerSm * blockSizeN_N3 / props.warpSize) / 
                     		(float)(props.maxThreadsPerMultiProcessor / 
                             		props.warpSize);
@@ -907,12 +925,12 @@ int main(int argc, char **argv){
 			
 			/// SKL-algo	parameters	 stateupdate included in the kernel
 			int minGridSize_de, blockSizeN_de, gridSizeN_de;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_de, &blockSizeN_de, SKL_deliverspks, 0, 0));				
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_de, &blockSizeN_de, SKL_deliverspks1, 0, 0));				
   			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, SKL_deliverspks, blockSizeN_de, sMemSize));
+      					&numBlocksPerSm, SKL_deliverspks1, blockSizeN_de, sMemSize));
       			gridSizeN_de = numSms * numBlocksPerSm;
-  			dim3 SKL_dimGrid(gridSizeN_de, 1, 1),
-      				SKL_dimBlock(blockSizeN_de, 1, 1); //
+  			dim3 SKL_dimGrid(gridSizeN_de/4, 4, 1),
+      				SKL_dimBlock(blockSizeN_de/4,4, 1); //
       			occupancy = (numBlocksPerSm * blockSizeN_de / props.warpSize) / 
                     		(float)(props.maxThreadsPerMultiProcessor / 
                             		props.warpSize);
@@ -921,13 +939,13 @@ int main(int argc, char **argv){
 							
       			void *SKL_kernelArgs[] = {
      				 (void *)&d_Neuron,  (void *)&d_spikes, (void *)&d_conn_w, (void *)&d_conn_idx,
-      				(void *)&d_Isyn, (void *)&N, (void *)&N_exc, (void *)&N_syn, (void *)&d_totalspkcount, (void *)&devStates, (void *)&mode, (void *)&d_count, };    			
+      				(void *)&d_Isyn, (void *)&N, (void *)&N_exc, (void *)&N_syn, (void *)&d_totalspkcount, (void *)&mode, (void *)&d_count, };    			
 			/////////////////////	//////////////////////////////////////////////////////////////
 			start_sim = clock();
 			
 			cudaProfilerStart();		
 			
-			if (!(dynamic ==4))
+			if (dynamic !=4)
 			{
 
 			  // Start main simulation loop  ITER_COUNT
@@ -938,12 +956,11 @@ int main(int argc, char **argv){
 				start = clock();
 				// State update
 				
-				if ((dynamic ==4 ) ) 
+				if (dynamic !=3 )  
+					stateupdate<<<dimGrid_su, dimBlock_su>>>(d_Neuron, d_spikes, d_conn_w, d_conn_idx, d_Isyn, N, N_exc, N_syn, gridSizeN_ps, blockSizeN_ps, dynamic, mode); // for SOTA 		
+				else 
 					cudaLaunchCooperativeKernel((void *)AB_stateupdate, dimGrid_per, dimBlock_per, kernelArgs_per, sMemSize, NULL);	//for AB-algo		
 						//AB_stateupdate<<<dimGrid_per, dimBlock_per>>>(d_Neuron, d_spikes, d_Isyn, devStates, N, N_exc, mode); 
-				else 
-					stateupdate<<<dimGrid_su, dimBlock_su>>>(d_Neuron, d_spikes, d_conn_w, d_conn_idx, d_Isyn, devStates, N, N_exc, N_syn, gridSizeN_ps, blockSizeN_ps, dynamic, mode); // for SOTA 
-				
 				middle = clock();
 				
 				switch ( dynamic ){
@@ -998,7 +1015,7 @@ int main(int argc, char **argv){
                                	totalspkcount = 0;	// *totalspkcount_new = 0; 
                                	elapsed = 0;	
                                	start = clock();                               	
-                               	cudaLaunchCooperativeKernel((void *)SKL_deliverspks,
+                               	cudaLaunchCooperativeKernel((void *)SKL_deliverspks1,
                                               SKL_dimGrid, SKL_dimBlock, SKL_kernelArgs,
                                               sMemSize, NULL);
                                       end = clock();
