@@ -25,7 +25,7 @@ iterations = sys.argv[2] # '2000'    # number of iterations
 
 # Create a folder with the GPU's name for the results
 try: 
-    os.system("mkdir %s"%(nvidia_gpu))
+    os.makedirs(nvidia_gpu, exist_ok=True)
 except FileExistsError: 
     pass
 
@@ -37,6 +37,9 @@ Nsyn = 1000
 os.system("./gpu4snn %s %s %s"%(N, Nsyn, iterations))
 
 ### Move the results from the `Results` directory to a dedicated path
-path = './' + nvidia_gpu + '/' + iterations
-os.system("mkdir %s"%(path))
+path = nvidia_gpu + '/' + iterations
+try: 
+    os.makedirs(path, exist_ok=True)
+except FileExistsError: 
+    pass
 os.system("mv ./Results %s"%(path))
