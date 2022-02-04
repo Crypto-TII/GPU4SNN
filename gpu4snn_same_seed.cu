@@ -298,7 +298,7 @@ __global__ void AB_stateupdate(Neuron *neuron,			// Neural parameters of individ
 			ge = 5.0f; gi = 2.0f;
 			break;
 		case 2: // irregular regime
-			ge = 7.5f; gi = 3.0f;
+			ge = 7.5f; gi = 3.0f; 
 			//ge = 15.0f; gi = 6.0f;
 			//ge = 30.0f; gi = 12.0f;
 			break;
