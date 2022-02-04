@@ -15,6 +15,15 @@ import numpy as np
 import sys, argparse, csv
 import re
 
+# Set the number of neurons and synapses 
+N    = 2500
+Nsyn = 1000
+
+
+#create files for neuron configurations
+os.system("nvcc -I/usr/local/cuda/samples/common/inc/ -I/usr/local/cuda/include/ gpu4snn_N_NS_files.cu -o gpu4snn_N_NS_files")
+os.system("././gpu4snn_N_NS_files %s %s"%(N, Nsyn))
+
 os.system("make clean")
 os.system("make rmdata")
 os.system("make all")
@@ -25,21 +34,14 @@ iterations = sys.argv[2] # '2000'    # number of iterations
 
 # Create a folder with the GPU's name for the results
 try: 
-    os.makedirs(nvidia_gpu, exist_ok=True)
+    os.system("mkdir %s"%(nvidia_gpu))
 except FileExistsError: 
     pass
-
-# Set the number of neurons and synapses 
-N    = 2500
-Nsyn = 1000
 
 # Run the cuda code: 
 os.system("./gpu4snn %s %s %s"%(N, Nsyn, iterations))
 
 ### Move the results from the `Results` directory to a dedicated path
-path = nvidia_gpu + '/' + iterations
-try: 
-    os.makedirs(path, exist_ok=True)
-except FileExistsError: 
-    pass
+path = './' + nvidia_gpu + '/' + iterations
+os.system("mkdir %s"%(path))
 os.system("mv ./Results %s"%(path))
