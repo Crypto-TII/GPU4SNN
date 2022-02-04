@@ -165,9 +165,9 @@ __global__ void stateupdate(Neuron *neuron,			// Neural parameters of individual
 			ge = 5.0f; gi = 2.0f;
 			break;
 		case 2: // irregular regime
-			//ge = 7.5f; gi = 3.0f;
+			ge = 7.5f; gi = 3.0f;
 			//ge = 15.0f; gi = 6.0f;
-			ge = 30.0f; gi = 12.0f;
+			//ge = 30.0f; gi = 12.0f;
 			break;
 		}
 
@@ -298,9 +298,9 @@ __global__ void AB_stateupdate(Neuron *neuron,			// Neural parameters of individ
 			ge = 5.0f; gi = 2.0f;
 			break;
 		case 2: // irregular regime
-			//ge = 7.5f; gi = 3.0f;
+			ge = 7.5f; gi = 3.0f;
 			//ge = 15.0f; gi = 6.0f;
-			ge = 30.0f; gi = 12.0f;
+			//ge = 30.0f; gi = 12.0f;
 			break;
 		}
 
@@ -408,9 +408,9 @@ __device__ void SKL_stateupdate1(Neuron *neuron,			// Neural parameters of indiv
 			ge = 5.0f; gi = 2.0f;
 			break;
 		case 2: // irregular regime
-			//ge = 7.5f; gi = 3.0f;
+			ge = 7.5f; gi = 3.0f;
 			//ge = 15.0f; gi = 6.0f;
-			ge = 30.0f; gi = 12.0f;
+			//ge = 30.0f; gi = 12.0f;
 			break;
 		}
 
