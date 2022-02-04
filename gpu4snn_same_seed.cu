@@ -203,7 +203,8 @@ __global__ void stateupdate(Neuron *neuron,			// Neural parameters of individual
 			neuron[id].nospks ++;
 			// AP-algorithm for spike propagation
 			// dynamic: 0 AP-algorithm
-			if ( dynamic == 0  )  //or dynamic == 1
+			//if ( dynamic == 0  )  //or dynamic == 1
+			if ( dynamic == 0 or dynamic == 1 )  //
 				propagatespikes<<<gridSize, blockSize>>>(id, d_conn_w, d_conn_idx, d_Isyn, N, N_syn);
 
 		}
@@ -298,7 +299,7 @@ __global__ void AB_stateupdate(Neuron *neuron,			// Neural parameters of individ
 			ge = 5.0f; gi = 2.0f;
 			break;
 		case 2: // irregular regime
-			ge = 7.5f; gi = 3.0f; 
+			ge = 7.5f; gi = 3.0f;
 			//ge = 15.0f; gi = 6.0f;
 			//ge = 30.0f; gi = 12.0f;
 			break;
@@ -493,13 +494,12 @@ __global__ void SKL_deliverspks1(Neuron *neuron,		// Neural parameters of indivi
 	grid_group grid = this_grid();
 	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
 	unsigned int idy = threadIdx.y + blockIdx.y * blockDim.y;
-	unsigned int id = idx*gridDim.y*blockDim.y+idy;	 
+	//unsigned int id = idx*gridDim.y*blockDim.y+idy;	 
 	//int d_count = d_count1;
 	  if(threadIdx.x==0 && blockIdx.x==0 && threadIdx.y==0 && blockIdx.y==0 && threadIdx.z==0 && blockIdx.z==0) { 
 	  	d_count = d_count1;		  	
 	  }
-	*d_totalspkcount = 0;  int counter_value=0 ;
-	 //
+	*d_totalspkcount = 0;  //int counter_value=0 ; 	 //
 	 grid.sync();
 	 __threadfence(); 
 	while(d_count){	
@@ -527,7 +527,7 @@ __global__ void SKL_deliverspks1(Neuron *neuron,		// Neural parameters of indivi
 		}	
 	   idx = threadIdx.x + blockIdx.x * blockDim.x;
 	   idy = threadIdx.y + blockIdx.y * blockDim.y;
-	   id = idx*gridDim.y*blockDim.y+idy;	
+	   //id = idx*gridDim.y*blockDim.y+idy;	
 	   //id = idx;	
 	   //*d_totalspkcount = 0; 
 	   grid.sync();
@@ -667,21 +667,69 @@ int main(int argc, char **argv){
       				
       	printf("randgeneratorinit blockSizeN_rng = %d , maxActiveBlocks = %d gridSizeN_rng =%d \n", blockSizeN_rng, numSms * numBlocksPerSm, gridSizeN_rng);
 		
-	//randgeneratorinit<<<gridSizeN, blockSizeN>>>(time(NULL), devStates);
-	unsigned int seed_cpu = 1643957724 ; //time(NULL);
+	float *host_rand_float ; //=  (float *)malloc(N*sizeof(float));
+	host_rand_float =  (float *)malloc(N*sizeof(float));
+		
+	float *dev_rand_float;
+	cudaGetErrorString(cudaMalloc((void **)&dev_rand_float, N*sizeof(float)));	
+					//randgeneratorinit<<<gridSizeN, blockSizeN>>>(time(NULL), devStates);
+	/*unsigned int seed_cpu = 1643957724 ; //time(NULL);
 	cout<< "seed_cpu " <<seed_cpu<<"\n";
 	randgeneratorinit<<<dimGrid_rng, dimBlock_rng>>>(seed_cpu, devStates, N);
 	cudaDeviceSynchronize();
 	
-	float *dev_rand_float;
-	cudaGetErrorString(cudaMalloc((void **)&dev_rand_float, N*sizeof(float)));
-	
 	randgeneratorinit2<<<dimGrid_rng, dimBlock_rng>>>(dev_rand_float, devStates, N);
 	cudaDeviceSynchronize();
+	
 	// Initialize connectivity matrix on the GPU
-	printf("Initializing random connectivity matrix values\n");
+	//printf("Initializing random connectivity matrix values\n");
+	
+	cudaGetErrorString(cudaMemcpy(host_rand_float, dev_rand_float, N*sizeof(float), cudaMemcpyDeviceToHost));
+	
+	FILE *filePtr_N_states; 
+   	filePtr_N_states = fopen("N_states","w");
+   	for (int i = 0; i < N; i++) {      		
+      			//fprintf(filePtr, "%.3g\t%.3g\t%.5g\n", i*N_syn+j, h_conn_idx[i*N_syn+j], h_conn_w[i*N_syn+j]);
+      			fprintf(filePtr_N_states, "%d\t%.5g\n", i, host_rand_float[i]);
+      			//fprintf(filePtr2, "%.3g\t%.5g\n", i*N_syn+j, h_conn_w[i*N_syn+j]);   	
+   	}
+   	*/
+   	FILE *filePtr_N_states; 
+   	//filePtr_N_states = fopen("N_states","r");
+   	
+   	const char* q1 = "N_states";
+    	const char* q2 = argv[1];
 
-	int idx;
+    	//char * qq = (char*) malloc((strlen(q1)+ strlen(q2))*sizeof(char));
+    	
+	
+	char* filename =  (char*) malloc((strlen(q1)+ strlen(q2))*sizeof(char)); //"N_states"; //"input.txt";
+	strcpy(filename,q1);
+	strcat(filename,q2);
+	cout << filename << "\t" << q2 << "\n\n\n";
+	filePtr_N_states = fopen(filename,"r");
+   	
+   	//FILE *filePtr_N_states_VAL; 
+   	//filePtr_N_states_VAL = fopen("N_states_VAL","w");
+   	for (int i = 0; i < N; i++) {      		
+      			//fprintf(filePtr, "%.3g\t%.3g\t%.5g\n", i*N_syn+j, h_conn_idx[i*N_syn+j], h_conn_w[i*N_syn+j]);  			
+      			char file_contents[100]; 
+      			char file_contents2[100];
+      			int N; 
+      			if(!feof(filePtr_N_states))   fscanf(filePtr_N_states, "%s %s", file_contents, file_contents2);	
+      				//if(sscanf(file_contents, "%*d %d %f ", &h_conn_idx[i*N_syn+j], &h_conn_w[i*N_syn+j]) != 1) puts("scanf() failed!");
+      			
+      			N = atoi(file_contents);
+      			host_rand_float[N] = atof(file_contents2);
+      			
+      			//fprintf(filePtr_N_states_VAL, "%d\t%.5g\n", i, host_rand_float[i]);
+      			//fprintf(filePtr2, "%.3g\t%.5g\n", i*N_syn+j, h_conn_w[i*N_syn+j]);   	
+   	}
+	printf("Initializing random connectivity matrix values\n");
+	fclose(filePtr_N_states);
+	cudaGetErrorString(cudaMemcpy(dev_rand_float, host_rand_float, N*sizeof(float), cudaMemcpyHostToDevice));
+	
+	/*int idx;
 	size_t postsynidx_size;
 	int postsynidx[N];						// postsynaptic neuron index
 	float rand_float;
@@ -707,7 +755,76 @@ int main(int argc, char **argv){
 		}
 		if (i%1000==0)
 			cout << "neuron " << i << " had connections configured.\n";
-	}
+	}*/
+	
+	
+   	/*FILE *filePtr;
+ 
+   	filePtr = fopen("floatArray","w");
+ 
+   	for (int i = 0; i < N; i++) {
+      		//y[i] = sqrt(x[i]);
+      		for(int j=0; j<N_syn; j++){
+      			//fprintf(filePtr, "%.3g\t%.3g\t%.5g\n", i*N_syn+j, h_conn_idx[i*N_syn+j], h_conn_w[i*N_syn+j]);
+      			fprintf(filePtr, "%d\t%d\t%.5g\n", i*N_syn+j, h_conn_idx[i*N_syn+j], h_conn_w[i*N_syn+j]);
+      			//fprintf(filePtr2, "%.3g\t%.5g\n", i*N_syn+j, h_conn_w[i*N_syn+j]);
+   	}
+   	}*/
+
+	//const char* filename = "NS_synapses" ; //"input.txt";
+	
+	FILE * fptr; // = fopen(filename,"r");
+	const char* q21 = "NS_synapses";
+ 	const char* q22 = argv[1];
+ 	const char* q23 = "_";
+ 	const char* q24 = argv[2];
+ 	char* filename2 = (char*) malloc((strlen(q21)+ strlen(q22)+strlen(q23)+strlen(q24))*sizeof(char));
+ 	strcpy(filename2,q21);
+    	strcat(filename2,q22);
+    	strcat(filename2,q23);
+    	strcat(filename2,q24);
+   	fptr = fopen(filename2,"w");
+	cout << filename2 << "\n";
+	cout << filename2 << "\t" << q22 << "\t" << q24 << "\n\n\n";
+  	//unsigned int     string1 ;
+  	if(fptr == NULL){
+    		printf("Error!! Cannot open file \n" );
+    		return 1;}
+  	else
+    	{
+      		printf("File opened successfully :) \n");
+      		char file_contents[100]; 
+      		char file_contents2[100];     		
+      		for (int i = 0; i < N; i++) {      			
+      			for(int j=0; j<N_syn; j++){      				
+      				//if(!feof(fptr)) fscanf(fptr, "%d%[^\n]" %d %f\n", &string1, &h_conn_idx[i*N_syn+j], &h_conn_w[i*N_syn+j]);		
+      				//"%d\t%d\t%.5g\n"	  // "%[^\t]\t%[^\t]\t%[^\n]\n",
+      				//if(!feof(fptr))   fscanf(fptr, "%[^\n] ", file_contents);		//"%*s %*s %s ",
+      				if(!feof(fptr))   fscanf(fptr, "%*s %*s %s %s ", file_contents, file_contents2);	
+      				//if(sscanf(file_contents, "%*d %d %f ", &h_conn_idx[i*N_syn+j], &h_conn_w[i*N_syn+j]) != 1) puts("scanf() failed!");
+      				h_conn_idx[i*N_syn+j] = atoi(file_contents);
+      				h_conn_w[i*N_syn+j] = atof(file_contents2);
+      				
+      				//fprintf(filePtr2, "%d\t%d\t%.5g\n", i*N_syn+j, h_conn_idx[i*N_syn+j], h_conn_w[i*N_syn+j]);
+      				//cout << file_contents << "\t"  << file_contents2 << "\t" <<  h_conn_idx[i*N_syn+j] << "\t"  << h_conn_w[i*N_syn+j] << "\n";      				 
+   			}
+   		}  
+    	}
+    	
+    	fclose(fptr);
+ 
+   	/*
+   	FILE *filePtr2; 
+   	filePtr2 = fopen("floatArray2","w");
+   	for (int i = 0; i < N; i++) {
+      		//y[i] = sqrt(x[i]);
+      		for(int j=0; j<N_syn; j++){
+      			//fprintf(filePtr, "%.3g\t%.3g\t%.5g\n", i*N_syn+j, h_conn_idx[i*N_syn+j], h_conn_w[i*N_syn+j]);
+      			fprintf(filePtr2, "%d\t%d\t%.5g\n", i*N_syn+j, h_conn_idx[i*N_syn+j], h_conn_w[i*N_syn+j]);
+      			//fprintf(filePtr2, "%.3g\t%.5g\n", i*N_syn+j, h_conn_w[i*N_syn+j]);
+   	}
+   	}*/
+
 
 	// Copy connectivity matrix to GPU memory
 	printf("Retrieving initial connectivity matrix\n");
@@ -1092,4 +1209,3 @@ int main(int argc, char **argv){
 	}
 	cudaDeviceReset();	
 }
-
