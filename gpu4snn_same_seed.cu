@@ -203,8 +203,8 @@ __global__ void stateupdate(Neuron *neuron,			// Neural parameters of individual
 			neuron[id].nospks ++;
 			// AP-algorithm for spike propagation
 			// dynamic: 0 AP-algorithm
-			//if ( dynamic == 0  )  //or dynamic == 1
-			if ( dynamic == 0 or dynamic == 1 )  //
+			if ( dynamic == 0  )  //or dynamic == 1
+			//if ( dynamic == 0 or dynamic == 1 )  //
 				propagatespikes<<<gridSize, blockSize>>>(id, d_conn_w, d_conn_idx, d_Isyn, N, N_syn);
 
 		}
@@ -783,7 +783,7 @@ int main(int argc, char **argv){
     	strcat(filename2,q22);
     	strcat(filename2,q23);
     	strcat(filename2,q24);
-   	fptr = fopen(filename2,"w");
+   	fptr = fopen(filename2,"r");
 	cout << filename2 << "\n";
 	cout << filename2 << "\t" << q22 << "\t" << q24 << "\n\n\n";
   	//unsigned int     string1 ;
