@@ -644,7 +644,7 @@ int main(int argc, char **argv){
 	int idx;
 	size_t postsynidx_size;
 	int postsynidx[N];						// postsynaptic neuron index
-	float rand_float;
+	//float rand_float;
 
 	//srand((unsigned) time(NULL));
 	for(int i=0; i < N; i++){				// run over neurons
@@ -655,11 +655,11 @@ int main(int argc, char **argv){
 
 		for(int j=0; j<N_syn; j++){			//run over synapses
 			idx = (int) rand() % postsynidx_size;
-			if ( i < N_exc ){
+			/*if ( i < N_exc ){
 				rand_float = (1000.0f/N_syn)* 0.5f*(float) rand()/RAND_MAX;
 			}else {
 				rand_float = (1000.0f/N_syn)* -1.0f*(float) rand()/RAND_MAX;
-			}
+			}*/
 			//h_conn_w[i*N_syn+j] = rand_float;
 			h_conn_w[i*N_syn+j] = 0 ; //rand_float;
 			h_conn_idx[i*N_syn+j] =  postsynidx[idx];
@@ -688,17 +688,7 @@ int main(int argc, char **argv){
 
 	// Round up according to array size
 	gridSizeNNsyn = (N*N_syn + blockSizeNNsyn - 1) / blockSizeNNsyn;
-		
-	// run this network configuration
-	// for three firing states (mode: 0 quiet, 1 balanced, 2 irregular)
-	// with three algorithms (dynamic: 0 AP, 1 N, 2 S 3 AB 4 SKL)
-	int d_count = atoi(argv[3]);
-	for (int mode=0; mode<3; mode++){
-		for (int dynamic=0; dynamic<5; dynamic=dynamic+1){
-
-			// Initialize neural parameters for excitatory and inhibitory neurons
-			printf("Initializing neuron parameters\n");
-			
+	
 			int minGridSize_ini, blockSizeN_ini, gridSizeN_ini;
 			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_ini, &blockSizeN_ini, stateupdate, 0, 0));
 				
@@ -711,6 +701,111 @@ int main(int argc, char **argv){
       			occupancy = (numBlocksPerSm * blockSizeN_ini / props.warpSize) / 
                     		(float)(props.maxThreadsPerMultiProcessor / 
                             		props.warpSize);
+      			
+      			
+	
+	//stateupdate parameters for SOTA - AP N S-algo		
+			int minGridSize_su, blockSizeN_su, gridSizeN_su;
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_su, &blockSizeN_su, stateupdate, 0, 0));
+  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      					&numBlocksPerSm, stateupdate, blockSizeN_su, sMemSize));
+      					
+      			gridSizeN_su = (N + blockSizeN_su - 1) / blockSizeN_su;
+  				
+  			dim3 dimGrid_su(gridSizeN_su, 1, 1),
+      				dimBlock_su(blockSizeN_su, 1, 1); //
+      			occupancy = (numBlocksPerSm * blockSizeN_su / props.warpSize) / 
+                    		(float)(props.maxThreadsPerMultiProcessor / 
+                            		props.warpSize);
+      			
+      				
+      			//AP-algo parameters		
+      			int minGridSize_ps, blockSizeN_ps, gridSizeN_ps;
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_ps, &blockSizeN_ps, propagatespikes, 0, 0));
+  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      					&numBlocksPerSm, propagatespikes, blockSizeN_ps, sMemSize));
+      			gridSizeN_ps = (N + blockSizeN_ps - 1) / blockSizeN_ps;
+  				
+  			dim3 dimGrid_ps(gridSizeN_ps, 1, 1),
+      			dimBlock_ps(blockSizeN_ps, 1, 1); //
+      			occupancy = (numBlocksPerSm * blockSizeN_ps / props.warpSize) / 
+                    		(float)(props.maxThreadsPerMultiProcessor / 
+                            		props.warpSize);
+      			
+      			//N-algo parameters		
+      			int minGridSize_N, blockSizeN_N, gridSizeN_N;
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_N, &blockSizeN_N, deliverspks1, 0, 0));
+  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      					&numBlocksPerSm, deliverspks1, blockSizeN_N, sMemSize));
+      			gridSizeN_N = (N + blockSizeN_N - 1) / blockSizeN_N;
+  			  			
+  			dim3 dimGrid_N(gridSizeN_N, 1, 1),
+      			dimBlock_N(blockSizeN_N, 1, 1); //
+      			occupancy = (numBlocksPerSm * blockSizeN_N / props.warpSize) / 
+                    		(float)(props.maxThreadsPerMultiProcessor / 
+                            		props.warpSize);
+      			/// S-algo parameters	
+      			int minGridSize_N2, blockSizeN_N2, gridSizeN_N2;
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_N2, &blockSizeN_N2, deliverspks2, 0, 0));
+  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      					&numBlocksPerSm, deliverspks2, blockSizeN_N2, sMemSize));
+      			gridSizeN_N2 = (N*N_syn + blockSizeN_N2 - 1) / blockSizeN_N2;  //gridSizeNNsyn = (N*N_syn + blockSizeNNsyn - 1) / blockSizeNNsyn;
+  				
+  			dim3 dimGrid_N2(gridSizeN_N2, 1, 1),
+      				dimBlock_N2(blockSizeN_N2, 1, 1); //
+      			occupancy = (numBlocksPerSm * blockSizeN_N2 / props.warpSize) / 
+                    		(float)(props.maxThreadsPerMultiProcessor / 
+                            		props.warpSize);
+      			
+      			///// state update parameters for AB-algo using persistence
+      			int minGridSize_per, blockSizeN_per, gridSizeN_per;
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_per, &blockSizeN_per, AB_stateupdate, 0, 0));				
+  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      					&numBlocksPerSm, AB_stateupdate, blockSizeN_per, sMemSize));
+      			gridSizeN_per = numSms * numBlocksPerSm;
+  			dim3 dimGrid_per(gridSizeN_per, 1, 1),
+      				dimBlock_per(blockSizeN_per, 1, 1); //
+      			occupancy = (numBlocksPerSm * blockSizeN_per / props.warpSize) / 
+                    		(float)(props.maxThreadsPerMultiProcessor / 
+                            		props.warpSize);
+                            		
+      			///// spike propagation parameters for AB-algo using persistence	
+      			int minGridSize_N3, blockSizeN_N3, gridSizeN_N3;
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_N3, &blockSizeN_N3, AB_deliverspks, 0, 0));
+  				checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      					&numBlocksPerSm, AB_deliverspks, blockSizeN_N3, sMemSize));
+      				//gridSizeN_N2 = (N*N_syn + blockSizeN_N2 - 1) / blockSizeN_N2;  //gridSizeNNsyn = (N*N_syn + blockSizeNNsyn - 1) / blockSizeNNsyn;
+  			gridSizeN_N3 = numSms * numBlocksPerSm;
+  			dim3 AB_dimGrid(gridSizeN_N3, 1, 1),
+      				AB_dimBlock(blockSizeN_N3, 1, 1); //
+      			occupancy = (numBlocksPerSm * blockSizeN_N3 / props.warpSize) / 
+                    		(float)(props.maxThreadsPerMultiProcessor / 
+                            		props.warpSize);
+                            
+                       /// SKL-algo	parameters	 stateupdate included in the kernel
+			int minGridSize_de, blockSizeN_de, gridSizeN_de;
+			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_de, &blockSizeN_de, SKL_deliverspks, 0, 0));				
+  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      					&numBlocksPerSm, SKL_deliverspks, blockSizeN_de, sMemSize));
+      			gridSizeN_de = numSms * numBlocksPerSm;
+  			dim3 SKL_dimGrid(gridSizeN_de, 1, 1),
+      				SKL_dimBlock(blockSizeN_de, 1, 1); //
+      			occupancy = (numBlocksPerSm * blockSizeN_de / props.warpSize) / 
+                    		(float)(props.maxThreadsPerMultiProcessor / 
+                            		props.warpSize);
+      			
+      			
+		
+	// run this network configuration
+	// for three firing states (mode: 0 quiet, 1 balanced, 2 irregular)
+	// with three algorithms (dynamic: 0 AP, 1 N, 2 S 3 AB 4 SKL)
+	int d_count = atoi(argv[3]);
+	for (int mode=0; mode<3; mode++){
+		for (int dynamic=0; dynamic<5; dynamic=dynamic+1){
+
+			// Initialize neural parameters for excitatory and inhibitory neurons
+			printf("Initializing neuron parameters\n");
+						      			
       			printf("initNeuron numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       				
       			printf("initNeuron blockSizeN_ini = %d , maxActiveBlocks = %d gridSizeN_ini =%d \n", blockSizeN_ini, numSms * numBlocksPerSm, gridSizeN_ini);
@@ -787,97 +882,34 @@ int main(int argc, char **argv){
 			//cudaGetErrorString(cudaMemcpy(d_count, &spkcount, sizeof(int), cudaMemcpyHostToDevice));
 			cudaGetErrorString(cudaMemcpy(d_spkcount, &spkcount, sizeof(int), cudaMemcpyHostToDevice));
 			
-			//stateupdate parameters for SOTA - AP N S-algo		
-			int minGridSize_su, blockSizeN_su, gridSizeN_su;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_su, &blockSizeN_su, stateupdate, 0, 0));
-  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, stateupdate, blockSizeN_su, sMemSize));
-      					
-      			gridSizeN_su = (N + blockSizeN_su - 1) / blockSizeN_su;
-  				
-  			dim3 dimGrid_su(gridSizeN_su, 1, 1),
-      				dimBlock_su(blockSizeN_su, 1, 1); //
-      			occupancy = (numBlocksPerSm * blockSizeN_su / props.warpSize) / 
-                    		(float)(props.maxThreadsPerMultiProcessor / 
-                            		props.warpSize);
+			
+      			
       			printf("stateupdate numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       				
       			printf("stateupdate blockSizeN_su = %d , maxActiveBlocks = %d gridSizeN_su =%d \n", blockSizeN_su, numSms * numBlocksPerSm, gridSizeN_su);
-      				
-      			//AP-algo parameters		
-      			int minGridSize_ps, blockSizeN_ps, gridSizeN_ps;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_ps, &blockSizeN_ps, propagatespikes, 0, 0));
-  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, propagatespikes, blockSizeN_ps, sMemSize));
-      			gridSizeN_ps = (N + blockSizeN_ps - 1) / blockSizeN_ps;
-  				
-  			dim3 dimGrid_ps(gridSizeN_ps, 1, 1),
-      			dimBlock_ps(blockSizeN_ps, 1, 1); //
-      			occupancy = (numBlocksPerSm * blockSizeN_ps / props.warpSize) / 
-                    		(float)(props.maxThreadsPerMultiProcessor / 
-                            		props.warpSize);
+      			
+      			
       			printf("0 AP-algo propagatespikes numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       				
       			printf("0 AP-algo propagatespikes blockSizeN_ps = %d , maxActiveBlocks = %d gridSizeN_ps =%d \n", blockSizeN_ps, numSms * numBlocksPerSm, gridSizeN_ps);
       			
-      			//N-algo parameters		
-      			int minGridSize_N, blockSizeN_N, gridSizeN_N;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_N, &blockSizeN_N, deliverspks1, 0, 0));
-  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, deliverspks1, blockSizeN_N, sMemSize));
-      			gridSizeN_N = (N + blockSizeN_N - 1) / blockSizeN_N;
-  			  			
-  			dim3 dimGrid_N(gridSizeN_N, 1, 1),
-      			dimBlock_N(blockSizeN_N, 1, 1); //
-      			occupancy = (numBlocksPerSm * blockSizeN_N / props.warpSize) / 
-                    		(float)(props.maxThreadsPerMultiProcessor / 
-                            		props.warpSize);
+      			
       			printf("1 N-algo deliverspks1 numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       			printf("1 N-algo deliverspks1 blockSizeN_N = %d , maxActiveBlocks = %d gridSizeN_N =%d \n", blockSizeN_N, numSms * numBlocksPerSm, gridSizeN_N);
       			
-      			/// S-algo parameters	
-      			int minGridSize_N2, blockSizeN_N2, gridSizeN_N2;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_N2, &blockSizeN_N2, deliverspks2, 0, 0));
-  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, deliverspks2, blockSizeN_N2, sMemSize));
-      			gridSizeN_N2 = (N*N_syn + blockSizeN_N2 - 1) / blockSizeN_N2;  //gridSizeNNsyn = (N*N_syn + blockSizeNNsyn - 1) / blockSizeNNsyn;
-  				
-  			dim3 dimGrid_N2(gridSizeN_N2, 1, 1),
-      				dimBlock_N2(blockSizeN_N2, 1, 1); //
-      			occupancy = (numBlocksPerSm * blockSizeN_N2 / props.warpSize) / 
-                    		(float)(props.maxThreadsPerMultiProcessor / 
-                            		props.warpSize);
+      			
       			printf("2 S-algo deliverspks2 numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       			printf("2 S-algo deliverspks2 blockSizeN_N2 = %d , maxActiveBlocks = %d gridSizeN_N2 =%d \n", blockSizeN_N2, numSms * numBlocksPerSm, gridSizeN_N2);
       			
-      			///// state update parameters for AB-algo using persistence
-      			int minGridSize_per, blockSizeN_per, gridSizeN_per;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_per, &blockSizeN_per, AB_stateupdate, 0, 0));				
-  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, AB_stateupdate, blockSizeN_per, sMemSize));
-      			gridSizeN_per = numSms * numBlocksPerSm;
-  			dim3 dimGrid_per(gridSizeN_per, 1, 1),
-      				dimBlock_per(blockSizeN_per, 1, 1); //
-      			occupancy = (numBlocksPerSm * blockSizeN_per / props.warpSize) / 
-                    		(float)(props.maxThreadsPerMultiProcessor / 
-                            		props.warpSize);
+      			
+      			
       			printf("3 AB_stateupdate numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       			printf("3 AB_stateupdate blockSizeN_per = %d , maxActiveBlocks = %d gridSizeN_per =%d \n", blockSizeN_per, numSms * numBlocksPerSm, gridSizeN_per);  
       			void *kernelArgs_per[] = {
      				 (void *)&d_Neuron,  (void *)&d_spikes, (void *)&d_Isyn, (void *)&devStates, (void *)&N, (void *)&N_exc, (void *)&mode,};
       				
-      			///// spike propagation parameters for AB-algo using persistence	
-      			int minGridSize_N3, blockSizeN_N3, gridSizeN_N3;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_N3, &blockSizeN_N3, AB_deliverspks, 0, 0));
-  				checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, AB_deliverspks, blockSizeN_N3, sMemSize));
-      				//gridSizeN_N2 = (N*N_syn + blockSizeN_N2 - 1) / blockSizeN_N2;  //gridSizeNNsyn = (N*N_syn + blockSizeNNsyn - 1) / blockSizeNNsyn;
-  			gridSizeN_N3 = numSms * numBlocksPerSm;
-  			dim3 AB_dimGrid(gridSizeN_N3, 1, 1),
-      				AB_dimBlock(blockSizeN_N3, 1, 1); //
-      			occupancy = (numBlocksPerSm * blockSizeN_N3 / props.warpSize) / 
-                    		(float)(props.maxThreadsPerMultiProcessor / 
-                            		props.warpSize);
+      			
+                            		
       			printf("3 AB AB_deliverspks numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       			printf("3 AB AB_deliverspks blockSizeN_N3 = %d , maxActiveBlocks = %d gridSizeN_N3 =%d \n", blockSizeN_N3, numSms * numBlocksPerSm, gridSizeN_N3);
       			      			
@@ -885,17 +917,7 @@ int main(int argc, char **argv){
      				 (void *)&d_Neuron,  (void *)&d_spikes, (void *)&d_conn_w, (void *)&d_conn_idx,
       				(void *)&d_Isyn, (void *)&N, (void *)&N_exc, (void *)&N_inh, (void *)&N_syn, };
 			
-			/// SKL-algo	parameters	 stateupdate included in the kernel
-			int minGridSize_de, blockSizeN_de, gridSizeN_de;
-			checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&minGridSize_de, &blockSizeN_de, SKL_deliverspks, 0, 0));				
-  			checkCudaErrors(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      					&numBlocksPerSm, SKL_deliverspks, blockSizeN_de, sMemSize));
-      			gridSizeN_de = numSms * numBlocksPerSm;
-  			dim3 SKL_dimGrid(gridSizeN_de, 1, 1),
-      				SKL_dimBlock(blockSizeN_de, 1, 1); //
-      			occupancy = (numBlocksPerSm * blockSizeN_de / props.warpSize) / 
-                    		(float)(props.maxThreadsPerMultiProcessor / 
-                            		props.warpSize);
+			
       			printf("4 SKL SKL_deliverspks numSms = %d  numBlocksPerSm = %d Theoretical occupancy: %f \n", numSms , numBlocksPerSm, occupancy);
       			printf("4 SKL SKL_deliverspks blockSizeN_de = %d , maxActiveBlocks = %d gridSizeN_de =%d \n", blockSizeN_de, numSms * numBlocksPerSm, gridSizeN_de);
 							
