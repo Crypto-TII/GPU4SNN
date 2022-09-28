@@ -1,4 +1,3 @@
-# GPU4SNN
 # GPU4SNN: GPU-based Acceleration for Spiking Neural Network Simulations
 _(This work has been accepted at PPAM 2022 - 14th INTERNATIONAL CONFERENCE ON PARALLEL PROCESSING AND APPLIED MATHEMATICS)_
 
